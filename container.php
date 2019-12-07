@@ -7,6 +7,8 @@ namespace Building\App;
 use Building\Domain\Aggregate\Building;
 use Building\Domain\Command;
 use Building\Domain\DomainEvent\CheckInAnomalyDetected;
+use Building\Domain\DomainEvent\UserCheckedIn;
+use Building\Domain\DomainEvent\UserCheckedOut;
 use Building\Domain\Repository\BuildingRepositoryInterface;
 use Building\Infrastructure\Repository\BuildingRepository;
 use Doctrine\DBAL\Connection;
@@ -20,6 +22,7 @@ use Prooph\Common\Event\ActionEventListenerAggregate;
 use Prooph\Common\Event\ProophActionEventEmitter;
 use Prooph\Common\Messaging\FQCNMessageFactory;
 use Prooph\Common\Messaging\NoOpMessageConverter;
+use Prooph\EventSourcing\AggregateChanged;
 use Prooph\EventSourcing\EventStoreIntegration\AggregateTranslator;
 use Prooph\EventStore\Adapter\Doctrine\DoctrineEventStoreAdapter;
 use Prooph\EventStore\Adapter\Doctrine\Schema\EventStoreSchema;
@@ -27,6 +30,7 @@ use Prooph\EventStore\Adapter\PayloadSerializer\JsonPayloadSerializer;
 use Prooph\EventStore\Aggregate\AggregateRepository;
 use Prooph\EventStore\Aggregate\AggregateType;
 use Prooph\EventStore\EventStore;
+use Prooph\EventStore\Stream\StreamName;
 use Prooph\EventStoreBusBridge\EventPublisher;
 use Prooph\EventStoreBusBridge\TransactionManager;
 use Prooph\ServiceBus\CommandBus;
@@ -197,6 +201,11 @@ return new ServiceManager([
                 ));
             };
         },
+        UserCheckedIn::class . '-listeners' => function (ContainerInterface $container) : array {
+            return [
+                $container->get('project-checked-in-users'),
+            ];
+        },
         CheckInAnomalyDetected::class . '-listeners' => function (ContainerInterface $container) : array {
             $commandBus = $container->get(CommandBus::class);
 
@@ -218,5 +227,41 @@ return new ServiceManager([
                 )
             );
         },
+
+        'project-checked-in-users' => function (ContainerInterface $container) : callable {
+            $eventStore = $container->get(EventStore::class);
+
+            return function () use ($eventStore) : void {
+                /** @var AggregateChanged[] $events */
+                $events = $eventStore->loadEventsByMetadataFrom(
+                    new StreamName('event_stream'),
+                    ['aggregate_type' => Building::class]
+                );
+
+                /** @var array<string, array<string, null>> $checkedInUsersByBuilding */
+                $checkedInUsersByBuilding = [];
+
+                foreach ($events as $event) {
+                    if (! array_key_exists($event->aggregateId(), $checkedInUsersByBuilding)) {
+                        $checkedInUsersByBuilding[$event->aggregateId()] = [];
+                    }
+
+                    if ($event instanceof UserCheckedIn) {
+                        $checkedInUsersByBuilding[$event->aggregateId()][$event->username()] = null;
+                    }
+
+                    if ($event instanceof UserCheckedOut) {
+                        unset($checkedInUsersByBuilding[$event->aggregateId()][$event->username()]);
+                    }
+                }
+
+                foreach ($checkedInUsersByBuilding as $buildingId => $users) {
+                    file_put_contents(
+                        __DIR__ . '/public/building-' . $buildingId . '.json',
+                        json_encode(array_keys($users))
+                    );
+                }
+            };
+        }
     ],
 ]);
