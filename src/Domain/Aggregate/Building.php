@@ -9,6 +9,7 @@ use Building\Domain\DomainEvent\UserCheckedIn;
 use Building\Domain\DomainEvent\UserCheckedOut;
 use Prooph\EventSourcing\AggregateRoot;
 use Rhumsaa\Uuid\Uuid;
+use function array_key_exists;
 
 final class Building extends AggregateRoot
 {
@@ -17,6 +18,9 @@ final class Building extends AggregateRoot
 
     /** @var string */
     private $name;
+
+    /** @var array<string, null> */
+    private $checkedInUsers = [];
 
     public static function new(string $name) : self
     {
@@ -29,11 +33,19 @@ final class Building extends AggregateRoot
 
     public function checkInUser(string $username) : void
     {
+        if (array_key_exists($username, $this->checkedInUsers)) {
+            throw new \LogicException(sprintf('User "%s" already checked into "%s"', $username, $this->name));
+        }
+
         $this->recordThat(UserCheckedIn::toBuilding($this->uuid, $username));
     }
 
     public function checkOutUser(string $username) : void
     {
+        if (! array_key_exists($username, $this->checkedInUsers)) {
+            throw new \LogicException(sprintf('User "%s" not checked into "%s"', $username, $this->name));
+        }
+
         $this->recordThat(UserCheckedOut::ofBuilding($this->uuid, $username));
     }
 
@@ -45,12 +57,12 @@ final class Building extends AggregateRoot
 
     protected function whenUserCheckedIn(UserCheckedIn $event) : void
     {
-        // Empty, for now.
+        $this->checkedInUsers[$event->username()] = null;
     }
 
     protected function whenUserCheckedOut(UserCheckedOut $event) : void
     {
-        // Empty, for now.
+        unset($this->checkedInUsers[$event->username()]);
     }
 
     /** {@inheritDoc} */
