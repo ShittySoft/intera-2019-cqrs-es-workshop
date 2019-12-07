@@ -6,6 +6,7 @@ namespace Building\App;
 
 use Building\Domain\Aggregate\Building;
 use Building\Domain\Command;
+use Building\Domain\DomainEvent\CheckInAnomalyDetected;
 use Building\Domain\Repository\BuildingRepositoryInterface;
 use Building\Infrastructure\Repository\BuildingRepository;
 use Doctrine\DBAL\Connection;
@@ -187,14 +188,27 @@ return new ServiceManager([
                 $buildings->store($building);
             };
         },
+        Command\NotifySecurityOfCheckInAnomaly::class => function () : callable {
+            return function (Command\NotifySecurityOfCheckInAnomaly $command) {
+                \error_log(\sprintf(
+                    'Check-in anomaly detected in building "%s", caused by user "%s"',
+                    $command->building()->toString(),
+                    $command->username()
+                ));
+            };
+        },
+        CheckInAnomalyDetected::class . '-listeners' => function (ContainerInterface $container) : array {
+            $commandBus = $container->get(CommandBus::class);
 
-//        CheckInAnomalyDetected::class . '-listeners' => function (ContainerInterface $container) : array {
-//            return [
-//                function (CheckInAnomalyDetected $e) : void {
-//                    // @TODO something here
-//                }
-//            ];
-//        },
+            return [
+                function (CheckInAnomalyDetected $anomaly) use ($commandBus) : void {
+                    $commandBus->dispatch(Command\NotifySecurityOfCheckInAnomaly::inBuilding(
+                        $anomaly->uuid(),
+                        $anomaly->username()
+                    ));
+                },
+            ];
+        },
         BuildingRepositoryInterface::class => function (ContainerInterface $container) : BuildingRepositoryInterface {
             return new BuildingRepository(
                 new AggregateRepository(
