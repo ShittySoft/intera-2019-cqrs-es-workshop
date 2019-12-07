@@ -178,7 +178,6 @@ return new ServiceManager([
                 $buildings->store($building);
             };
         },
-
         Command\CheckOut::class => function (ContainerInterface $container) : callable {
             $buildings = $container->get(BuildingRepositoryInterface::class);
 
@@ -188,6 +187,14 @@ return new ServiceManager([
                 $buildings->store($building);
             };
         },
+
+//        CheckInAnomalyDetected::class . '-listeners' => function (ContainerInterface $container) : array {
+//            return [
+//                function (CheckInAnomalyDetected $e) : void {
+//                    // @TODO something here
+//                }
+//            ];
+//        },
         BuildingRepositoryInterface::class => function (ContainerInterface $container) : BuildingRepositoryInterface {
             return new BuildingRepository(
                 new AggregateRepository(
