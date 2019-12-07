@@ -8,6 +8,7 @@
 >
     <projectFiles>
         <directory name="src" />
+        <file name="bin/project-current-checked-in-users.php" />
         <file name="public/index.php" />
         <file name="container.php" />
         <ignoreFiles>
