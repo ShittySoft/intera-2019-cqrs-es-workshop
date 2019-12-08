@@ -36,6 +36,12 @@
     }
   },
   "require-dev": {
+    "behat/behat": "^3.3",
     "vimeo/psalm": "^3.7"
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Specification\\": "test/Specification"
+    }
   }
 }
